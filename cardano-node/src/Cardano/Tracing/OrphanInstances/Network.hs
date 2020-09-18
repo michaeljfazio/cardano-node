@@ -427,7 +427,6 @@ instance ( ConvertTxId blk
       where
         presentTx :: GenTx blk -> Value
         presentTx =  String . renderTxIdForVerbosity verb . txId
-
   toObject _v (AnyMessageAndAgency stok MsgRequestRange{}) =
     mkObject [ "kind" .= String "MsgRequestRange"
              , "agency" .= String (pack $ show stok)
