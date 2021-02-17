@@ -122,10 +122,10 @@ data QueryInShelleyBasedEra era result where
        :: QueryInShelleyBasedEra era EpochNo
 
      QueryGenesisParameters
-       :: QueryInShelleyBasedEra era GenesisParameters
+       :: QueryInShelleyBasedEra era (GenesisParameters era)
 
      QueryProtocolParameters
-       :: QueryInShelleyBasedEra era ProtocolParameters
+       :: QueryInShelleyBasedEra era (ProtocolParameters era)
 
      QueryProtocolParametersUpdate
        :: QueryInShelleyBasedEra era
@@ -165,7 +165,7 @@ deriving instance Show (QueryInShelleyBasedEra era result)
 newtype ByronUpdateState = ByronUpdateState Byron.Update.State
   deriving Show
 
-newtype UTxO era = UTxO (Map TxIn (TxOut era))
+newtype UTxO era = UTxO (Map (TxIn era) (TxOut era))
 
 instance IsCardanoEra era => ToJSON (UTxO era) where
   toJSON (UTxO m) = toJSON m
@@ -219,13 +219,18 @@ fromUTxO eraConversion utxo =
   case eraConversion of
     ShelleyBasedEraShelley ->
       let Shelley.UTxO sUtxo = utxo
-      in UTxO . Map.fromList . map (bimap fromShelleyTxIn fromShelleyTxOut) $ Map.toList sUtxo
+      in UTxO . Map.fromList . map (bimap (fromShelleyTxIn NotPlutusInput) fromShelleyTxOut) $ Map.toList sUtxo
     ShelleyBasedEraAllegra ->
       let Shelley.UTxO sUtxo = utxo
-      in UTxO . Map.fromList . map (bimap fromShelleyTxIn (fromTxOut ShelleyBasedEraAllegra)) $ Map.toList sUtxo
+      in UTxO . Map.fromList . map (bimap (fromShelleyTxIn NotPlutusInput) (\txo -> fromTxOut ShelleyBasedEraAllegra txo Shelley.SNothing)) $ Map.toList sUtxo
     ShelleyBasedEraMary ->
       let Shelley.UTxO sUtxo = utxo
-      in UTxO . Map.fromList . map (bimap fromShelleyTxIn (fromTxOut ShelleyBasedEraMary)) $ Map.toList sUtxo
+      in UTxO . Map.fromList . map (bimap (fromShelleyTxIn NotPlutusInput) (\txo -> fromTxOut ShelleyBasedEraMary txo Shelley.SNothing)) $ Map.toList sUtxo
+    ShelleyBasedEraAlonzo ->
+      let Shelley.UTxO sUtxo = utxo
+      in UTxO . Map.fromList . map (bimap (fromShelleyTxIn NotPlutusInput)
+                                   (\txo -> fromTxOut ShelleyBasedEraAlonzo txo (Shelley.SJust $ error "Waiting on eUTxO"))) $ Map.toList sUtxo
+                                  --TODO: Will eUTxO distinguish between plutus fees and spending inputs?
 
 fromShelleyPoolDistr :: Shelley.PoolDistr StandardCrypto
                      -> Map (Hash StakePoolKey) Rational
@@ -284,6 +289,7 @@ toConsensusQuery (QueryInEra erainmode (QueryInShelleyBasedEra era q)) =
       ShelleyEraInCardanoMode -> toConsensusQueryShelleyBased erainmode q
       AllegraEraInCardanoMode -> toConsensusQueryShelleyBased erainmode q
       MaryEraInCardanoMode    -> toConsensusQueryShelleyBased erainmode q
+      AlonzoEraInCardanoMode  -> error "" --toConsensusQueryShelleyBased erainmode q
 
 
 toConsensusQueryShelleyBased
@@ -350,6 +356,7 @@ consensusQueryInEraInMode ByronEraInCardanoMode   = Consensus.QueryIfCurrentByro
 consensusQueryInEraInMode ShelleyEraInCardanoMode = Consensus.QueryIfCurrentShelley
 consensusQueryInEraInMode AllegraEraInCardanoMode = Consensus.QueryIfCurrentAllegra
 consensusQueryInEraInMode MaryEraInCardanoMode    = Consensus.QueryIfCurrentMary
+consensusQueryInEraInMode AlonzoEraInCardanoMode  = error "" -- Consensus.QueryIfCurrentAlonzo
 
 
 -- ----------------------------------------------------------------------------
@@ -423,6 +430,15 @@ fromConsensusQueryResult (QueryInEra MaryEraInCardanoMode
               r'
       _ -> fromConsensusQueryResultMismatch
 
+fromConsensusQueryResult (QueryInEra AlonzoEraInCardanoMode
+                                     (QueryInShelleyBasedEra _era _q)) _q' _r' =
+                                       error ""
+ --   case q' of
+ --     Consensus.QueryIfCurrentAlonzo q'' ->
+ --       bimap fromConsensusEraMismatch
+ --             (fromConsensusQueryResultShelleyBased ShelleyBasedEraAlonzo q q'')
+ --             r'
+ --     _ -> fromConsensusQueryResultMismatch
 
 fromConsensusQueryResultShelleyBased
   :: forall era ledgerera result result'.
@@ -446,15 +462,15 @@ fromConsensusQueryResultShelleyBased _ QueryEpoch q' epoch =
       Consensus.GetEpochNo -> epoch
       _                    -> fromConsensusQueryResultMismatch
 
-fromConsensusQueryResultShelleyBased _ QueryGenesisParameters q' r' =
+fromConsensusQueryResultShelleyBased shelleyBasedEra' QueryGenesisParameters q' r' =
     case q' of
-      Consensus.GetGenesisConfig -> fromShelleyGenesis
+      Consensus.GetGenesisConfig -> fromShelleyGenesis shelleyBasedEra'
                                       (Consensus.getCompactGenesis r')
       _                          -> fromConsensusQueryResultMismatch
 
-fromConsensusQueryResultShelleyBased _ QueryProtocolParameters q' r' =
+fromConsensusQueryResultShelleyBased shelleyBasedEra' QueryProtocolParameters q' r' =
     case q' of
-      Consensus.GetCurrentPParams -> fromShelleyPParams r'
+      Consensus.GetCurrentPParams -> fromShelleyPParams shelleyBasedEra' r'
       _                           -> fromConsensusQueryResultMismatch
 
 fromConsensusQueryResultShelleyBased _ QueryProtocolParametersUpdate q' r' =

@@ -1,6 +1,7 @@
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TypeFamilies #-}
 
 -- | Certificates embedded in transactions
@@ -37,36 +38,36 @@ module Cardano.Api.Certificate (
 
 import           Prelude
 
-import           Data.Maybe
 import           Data.ByteString (ByteString)
+import qualified Data.Foldable as Foldable
+import qualified Data.Map.Strict as Map
+import           Data.Maybe
+import qualified Data.Sequence.Strict as Seq
+import qualified Data.Set as Set
 import           Data.Text (Text)
 import qualified Data.Text.Encoding as Text
-import qualified Data.Map.Strict as Map
-import qualified Data.Set as Set
-import qualified Data.Sequence.Strict as Seq
-import qualified Data.Foldable as Foldable
 
 import           Data.IP (IPv4, IPv6)
 import           Network.Socket (PortNumber)
 
-import           Cardano.Slotting.Slot (EpochNo (..))
 import qualified Cardano.Crypto.Hash.Class as Crypto
+import           Cardano.Slotting.Slot (EpochNo (..))
 
 import           Ouroboros.Consensus.Shelley.Protocol.Crypto (StandardCrypto)
 
-import           Shelley.Spec.Ledger.BaseTypes
-                   (maybeToStrictMaybe, strictMaybeToMaybe)
+import           Shelley.Spec.Ledger.BaseTypes (maybeToStrictMaybe, strictMaybeToMaybe)
 import qualified Shelley.Spec.Ledger.BaseTypes as Shelley
 import qualified Shelley.Spec.Ledger.Coin as Shelley (toDeltaCoin)
-import qualified Shelley.Spec.Ledger.TxBody as Shelley
 import           Shelley.Spec.Ledger.TxBody (MIRPot (..))
+import qualified Shelley.Spec.Ledger.TxBody as Shelley
 
 import           Cardano.Api.Address
-import           Cardano.Api.Hash
 import           Cardano.Api.HasTypeProxy
+import           Cardano.Api.Hash
 import           Cardano.Api.KeysByron
 import           Cardano.Api.KeysPraos
 import           Cardano.Api.KeysShelley
+import           Cardano.Api.Orphans ()
 import           Cardano.Api.SerialiseCBOR
 import           Cardano.Api.SerialiseTextEnvelope
 import           Cardano.Api.StakePoolMetadata
@@ -94,7 +95,7 @@ data Certificate =
                                      (Hash VrfKey)
    | MIRCertificate MIRPot MIRTarget
 
-  deriving stock (Eq, Show)
+  deriving stock (Eq, Ord, Show)
   deriving anyclass SerialiseAsCBOR
 
 instance HasTypeProxy Certificate where
@@ -134,7 +135,7 @@ data MIRTarget =
      -- 'TreasuryMIR', then using 'SendToOppositePotMIR' will transfer
      -- lovelace from the treasury to the reserves.
    | SendToOppositePotMIR Lovelace
-  deriving stock (Eq, Show)
+  deriving stock (Eq, Ord, Show)
 
 -- ----------------------------------------------------------------------------
 -- Stake pool parameters
@@ -154,7 +155,7 @@ data StakePoolParameters =
        stakePoolRelays        :: [StakePoolRelay],
        stakePoolMetadata      :: Maybe StakePoolMetadataReference
      }
-  deriving (Eq, Show)
+  deriving (Eq, Ord, Show)
 
 data StakePoolRelay =
 
@@ -170,14 +171,14 @@ data StakePoolRelay =
      | StakePoolRelayDnsSrvRecord
           ByteString
 
-  deriving (Eq, Show)
+  deriving (Eq,Ord, Show)
 
 data StakePoolMetadataReference =
      StakePoolMetadataReference {
        stakePoolMetadataURL  :: Text,
        stakePoolMetadataHash :: Hash StakePoolMetadata
      }
-  deriving (Eq, Show)
+  deriving (Eq, Ord, Show)
 
 
 -- ----------------------------------------------------------------------------
