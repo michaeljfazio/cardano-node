@@ -17,7 +17,7 @@ module Cardano.Tracing.OrphanInstances.Network () where
 
 import           Cardano.Prelude hiding (show)
 import           Prelude (String, show)
-
+import           Control.Concurrent.JobPool (JobPoolTrace(..))
 import           Control.Monad.Class.MonadTime (DiffTime, Time (..))
 import qualified Data.Set as Set
 import           Data.Text (pack)
@@ -167,6 +167,11 @@ instance HasSeverityAnnotation (TraceTxSubmissionOutbound txid tx) where
 instance HasPrivacyAnnotation (TraceKeepAliveClient remotePeer)
 instance HasSeverityAnnotation (TraceKeepAliveClient remotePeer) where
   getSeverityAnnotation _ = Info
+
+
+instance HasPrivacyAnnotation JobPoolTrace
+instance HasSeverityAnnotation JobPoolTrace where
+  getSeverityAnnotation _ = Debug
 
 
 instance HasPrivacyAnnotation TraceLedgerPeers
@@ -506,6 +511,11 @@ instance Show addr
       => HasTextFormatter (TraceKeepAliveClient addr) where
     formatText a _ = pack (show a)
 
+
+instance Transformable Text IO JobPoolTrace where
+    trTransformer = trStructuredText
+instance HasTextFormatter JobPoolTrace where
+    formatText a _ = pack (show a)
 
 instance Transformable Text IO TraceLedgerPeers where
   trTransformer = trStructuredText
@@ -1042,6 +1052,11 @@ instance Show remotePeer => ToObject (TraceKeepAliveClient remotePeer) where
       dTime :: Time -> Double
       dTime (Time d) = realToFrac d
 
+
+instance ToObject JobPoolTrace where
+  toObject _verb ev =
+    mkObject [ "kind" .= String "JobPoolTrace"
+             , "event" .= show ev ]
 
 instance ToObject TraceLedgerPeers where
   toObject _verb (PickedPeer addr _ackStake stake) =

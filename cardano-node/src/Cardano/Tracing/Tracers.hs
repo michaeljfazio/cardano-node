@@ -39,6 +39,7 @@ import qualified System.Metrics.Gauge as Gauge
 import qualified System.Metrics.Label as Label
 import qualified System.Metrics.Counter as Counter
 
+import           Control.Concurrent.JobPool (JobPoolTrace (..))
 import           Control.Tracer
 import           Control.Tracer.Transformers
 
@@ -305,6 +306,8 @@ mkTracers blockConfig tOpts@(TracingOn trSel) tr nodeKern ekgDirect = do
             tracerOnOff (traceServer trSel) verb "Server" tr,
           dtLedgerPeersTracer =
             tracerOnOff (traceLedgerPeers trSel) verb "LedgerPeers" tr,
+          dtJobPoolTracer = traceJobPoolMetrics ekgDirect $
+            tracerOnOff (traceJobPool trSel) verb "JobPool" tr,
           --
           -- local client tracers
           --
@@ -471,6 +474,18 @@ sendEKGDirectCounter ekgDirect name = do
       Nothing -> do
         counter <- EKG.getCounter name (ekgServer ekgDirect)
         Counter.inc counter
+        pure $ SMap.insert name counter registeredMap
+
+sendEKGDirectCounter' :: EKGDirect -> Text -> Int64 -> IO ()
+sendEKGDirectCounter' ekgDirect name step = do
+  modifyMVar_ (ekgCounters ekgDirect) $ \registeredMap -> do
+    case SMap.lookup name registeredMap of
+      Just counter -> do
+        Counter.add counter step
+        pure registeredMap
+      Nothing -> do
+        counter <- EKG.getCounter name (ekgServer ekgDirect)
+        Counter.add counter step
         pure $ SMap.insert name counter registeredMap
 
 _sendEKGDirectInt :: Integral a => EKGDirect -> Text -> a -> IO ()
@@ -1026,6 +1041,22 @@ nodeToNodeTracers' trSel verb tr =
   , NodeToNode.tTxSubmissionTracer = tracerOnOff (traceTxSubmissionProtocol trSel) verb "TxSubmissionProtocol" tr
   , NodeToNode.tTxSubmission2Tracer = tracerOnOff (traceTxSubmissionProtocol trSel) verb "TxSubmissionProtocol" tr
   }
+
+traceJobPoolMetrics
+    :: Maybe EKGDirect
+    -> Tracer IO JobPoolTrace
+    -> Tracer IO JobPoolTrace
+traceJobPoolMetrics Nothing tracer = tracer
+traceJobPoolMetrics (Just ekgDirect) tracer = Tracer jpTracer
+  where
+    jpTracer :: JobPoolTrace -> IO ()
+    jpTracer e@(JobPoolTraceStart label) = do
+      traceWith tracer e
+      sendEKGDirectCounter ekgDirect ("cardano.node.network.jobpool." <> (Text.pack label) <> ".threads")
+    jpTracer e@(JobPoolTraceEnd label) = do
+      traceWith tracer e
+      sendEKGDirectCounter' ekgDirect ("cardano.node.network.jobpool." <> (Text.pack label) <> ".threads") (-1)
+
 
 teeTraceBlockFetchDecision
     :: ( Eq peer

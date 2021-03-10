@@ -48,6 +48,7 @@ type TraceDnsResolver = ("TraceDnsResolver" :: Symbol)
 type TraceForge = ("TraceForge" :: Symbol)
 type TraceForgeStateInfo = ("TraceForgeStateInfo" :: Symbol)
 type TraceHandshake = ("TraceHandshake" :: Symbol)
+type TraceJobPool = ("TraceJobPool" :: Symbol)
 type TraceKeepAliveClient = ("TraceKeepAliveClient" :: Symbol)
 type TraceLedgerPeers = ("TraceLedgerPeers" :: Symbol)
 type TraceLocalChainSyncProtocol = ("TraceLocalChainSyncProtocol" :: Symbol)
@@ -103,6 +104,7 @@ data TraceSelection
   , traceForge :: OnOff TraceForge
   , traceForgeStateInfo :: OnOff TraceForgeStateInfo
   , traceHandshake :: OnOff TraceHandshake
+  , traceJobPool :: OnOff TraceJobPool
   , traceKeepAliveClient :: OnOff TraceKeepAliveClient
   , traceLedgerPeers :: OnOff TraceLedgerPeers
   , traceLocalChainSyncProtocol :: OnOff TraceLocalChainSyncProtocol
@@ -169,6 +171,8 @@ traceConfigParser v =
       forgeStateInfo = OnOff True
       handshake :: OnOff TraceHandshake
       handshake = OnOff False
+      jobPool :: OnOff TraceJobPool
+      jobPool = OnOff False
       keepAliveClient :: OnOff TraceKeepAliveClient
       keepAliveClient = OnOff False
       ledgerPeers :: OnOff TraceLedgerPeers
@@ -234,6 +238,7 @@ traceConfigParser v =
     <*> v .:? getName forge .!= forge
     <*> v .:? getName forgeStateInfo .!= forgeStateInfo
     <*> v .:? getName handshake .!= handshake
+    <*> v .:? getName jobPool .!= jobPool
     <*> v .:? getName keepAliveClient .!= keepAliveClient
     <*> v .:? getName ledgerPeers .!= ledgerPeers
     <*> v .:? getName localChainSyncProtocol .!= localChainSyncProtocol

@@ -187,7 +187,8 @@ connectToLocalNode LocalNodeConnectInfo {
         (Net.localSnocket iomgr localNodeSocketPath)
         Net.NetworkConnectTracers {
           Net.nctMuxTracer       = nullTracer,
-          Net.nctHandshakeTracer = nullTracer
+          Net.nctHandshakeTracer = nullTracer,
+          Net.nctJobPoolTracer   = nullTracer
         }
         versionedProtocls
         localNodeSocketPath
