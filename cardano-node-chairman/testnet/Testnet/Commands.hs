@@ -6,6 +6,7 @@ import           Options.Applicative
 import           System.IO (IO)
 import           Testnet.Commands.Byron
 import           Testnet.Commands.ByronShelley
+import           Testnet.Commands.Cardano
 import           Testnet.Commands.Shelley
 import           Testnet.Commands.Version
 
@@ -19,6 +20,7 @@ commandsTestnet = subparser $ mempty
   <>  commandGroup "Testnets:"
   <>  cmdByron
   <>  cmdByronShelley
+  <>  cmdCardano
   <>  cmdShelley
 
 commandsGeneral :: Parser (IO ())

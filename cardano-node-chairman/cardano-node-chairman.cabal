@@ -16,6 +16,7 @@ common common-modules
                         Test.Process
                         Testnet.Byron
                         Testnet.ByronShelley
+                        Testnet.Cardano
                         Testnet.Conf
                         Testnet.List
                         Testnet.Shelley
@@ -123,9 +124,9 @@ test-suite chairman-tests
                       , transformers
                       , unliftio
                       , unordered-containers
-  other-modules:        Spec.Chairman.Chairman
-                        Spec.Chairman.Byron
+  other-modules:        Spec.Chairman.Byron
                         Spec.Chairman.ByronShelley
+                        Spec.Chairman.Chairman
                         Spec.Chairman.Shelley
                         Spec.Network
 
@@ -181,6 +182,7 @@ executable cardano-testnet
                         Testnet.Commands
                         Testnet.Commands.Byron
                         Testnet.Commands.ByronShelley
+                        Testnet.Commands.Cardano
                         Testnet.Commands.Shelley
                         Testnet.Commands.Version
                         Testnet.Run
