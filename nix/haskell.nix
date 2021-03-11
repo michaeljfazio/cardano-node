@@ -32,8 +32,6 @@ let
   ''
   # Needed for the Windows cabal constraint solver.
   + lib.optionalString stdenv.hostPlatform.isWindows ''
-    max-backjumps: 10000
-    reorder-goals: True
   '';
 
   projectPackages = lib.attrNames (haskell-nix.haskellLib.selectProjectPackages
