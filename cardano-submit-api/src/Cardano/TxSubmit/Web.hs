@@ -112,14 +112,18 @@ deserialiseAnyOf :: forall b. ()
   => [FromSomeType SerialiseAsCBOR b]
   -> ByteString
   -> Either RawCborDecodeError b
-deserialiseAnyOf ts te = let (es, as) = partitionEithers results in maybe (errors es) Right (listToMaybe as)
+deserialiseAnyOf ts te = getResult $ partitionEithers results
+
   where
+    getResult :: ([DecoderError], [b]) -> Either RawCborDecodeError b
+    getResult (dErrors, []) = Left $ RawCborDecodeError dErrors
+    getResult (_, [result]) = Right result
+    getResult (_dErrors, _results) =
+      Left $ error "May want to make RawCborDecodeError a sum type to account for this case"
+
     results = fmap (`deserialiseOne` te) ts
 
-    errors :: [DecoderError] -> Either RawCborDecodeError b
-    errors es = case NEL.nonEmpty es of
-      Just fs -> Left (RawCborDecodeError fs)
-      Nothing -> Left (RawCborDecodeError (pure DecoderErrorVoid)) -- Should never hapen
+
 
 readByteStringTx :: ByteString -> ExceptT TxCmdError IO (InAnyCardanoEra Tx)
 readByteStringTx = firstExceptT TxCmdTxReadError . hoistEither . deserialiseAnyOf
