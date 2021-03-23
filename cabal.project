@@ -9,6 +9,7 @@ packages:
     cardano-node
     cardano-node-chairman
     cardano-submit-api
+    trace-forward
     hedgehog-extras
     nix/supervisord-cluster/topology
 
@@ -54,6 +55,9 @@ package cardano-node
   tests: True
 
 package cardano-node-chairman
+  tests: True
+
+package trace-forward
   tests: True
 
 -- The following is needed because Nix is doing something crazy.
