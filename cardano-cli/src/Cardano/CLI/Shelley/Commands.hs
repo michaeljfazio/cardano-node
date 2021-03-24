@@ -161,7 +161,7 @@ renderKeyCmd cmd =
 data TransactionCmd
   = TxBuildRaw
       AnyCardanoEra
-      [(TxInAnyEra, Maybe ZippedSpendingScript)]
+      [(TxInAnyEra, IsPlutusFee, Maybe ZippedSpendingScript)]
       [TxOutAnyEra]
       (Maybe (Value, Maybe ZippedMintingScript))
       -- ^ Multi-Asset value
@@ -174,8 +174,6 @@ data TransactionCmd
       [(CertificateFile, Maybe ZippedCertifyingScript)]
       [((StakeAddress, Lovelace), Maybe ZippedRewardingScript)]
       TxMetadataJsonSchema
-      -- ^ Auxillary scripts
-      [ScriptFile]
       (Maybe ProtocolParamsFile)
       -- ^ Must be specified when including plutus scripts
       [MetadataFile]

@@ -83,6 +83,7 @@ data ShelleyTxCmdError
   | ShelleyTxCmdPParamsNotSpecifiedPlutusScript
   | ShelleyTxCmdPlutusScriptMissingFees ScriptFile
   | ShelleyTxCmdPlutusScriptLockingPlutusFee ScriptFile
+  | ShelleyTxCmdIncorrectScriptProvided ScriptFile ScriptInAnyLang
   deriving Show
 
 data SomeTxBodyError where
@@ -170,6 +171,9 @@ renderShelleyTxCmdError err =
       "No script fees were specified for the Plutus script at: " <> Text.pack scriptFp
     ShelleyTxCmdPlutusScriptLockingPlutusFee (ScriptFile sFile) ->
       "Nonsensical to lock lock plutus script fee with script: " <> Text.pack sFile
+    ShelleyTxCmdIncorrectScriptProvided (ScriptFile fp) script  ->
+      "Expected a PlutusScript at: " <> Text.pack fp <> "but got: " <> Text.pack (show script)
+
 renderEra :: AnyCardanoEra -> Text
 renderEra (AnyCardanoEra ByronEra)   = "Byron"
 renderEra (AnyCardanoEra ShelleyEra) = "Shelley"
@@ -203,12 +207,11 @@ runTransactionCmd :: TransactionCmd -> ExceptT ShelleyTxCmdError IO ()
 runTransactionCmd cmd =
   case cmd of
     TxBuildRaw era txins txouts mValue mLowBound mUpperBound
-               fee certs wdrls metadataSchema scripts
+               fee certs wdrls metadataSchema
                mPparamsFile metadataFiles mUpProp out ->
       runTxBuildRaw era txins txouts mLowBound mUpperBound
                     fee mValue certs wdrls metadataSchema
-                    scripts mPparamsFile metadataFiles
-                    mUpProp out
+                    mPparamsFile metadataFiles mUpProp out
     TxSign txinfile skfiles network txoutfile ->
       runTxSign txinfile skfiles network txoutfile
     TxSubmit anyConensusModeParams network txFp ->
@@ -244,7 +247,6 @@ runTxBuildRaw
   -> [(CertificateFile, Maybe ZippedCertifyingScript)]
   -> [((StakeAddress, Lovelace), Maybe ZippedRewardingScript)]
   -> TxMetadataJsonSchema
-  -> [ScriptFile]
   -> Maybe ProtocolParamsFile
   -> [MetadataFile]
   -> Maybe UpdateProposalFile
@@ -253,7 +255,7 @@ runTxBuildRaw
 runTxBuildRaw (AnyCardanoEra era) txins txouts mLowerBound
               mUpperBound mFee mValue
               certFiles withdrawals
-              metadataSchema scripts
+              metadataSchema
               mParamsFile metadataFiles mUpdatePropFile
               (TxBodyFile fpath) = do
     valTxIns <- validateTxIns era txins
@@ -269,7 +271,6 @@ runTxBuildRaw (AnyCardanoEra era) txins txouts mLowerBound
         <*> ((,) <$> validateTxValidityLowerBound era mLowerBound
                  <*> validateTxValidityUpperBound era mUpperBound)
         <*> validateTxMetadataInEra  era metadataSchema metadataFiles
-        <*> validateTxAuxScripts     era scripts
         <*> return withDrawals
         <*> return certs
         <*> validateTxUpdateProposal era mUpdatePropFile
@@ -317,22 +318,45 @@ txFeatureMismatch era feature =
 validateTxIns :: forall era.
                  CardanoEra era
               -> [(TxInAnyEra, Maybe ZippedSpendingScript)]
-              -> ExceptT ShelleyTxCmdError IO [TxIn era]
+              -> ExceptT ShelleyTxCmdError IO [(TxIn, WitnessKind WitTxIn era, TxInUsedForFees era)]
 validateTxIns era = mapM toTxIn
   where
-    toTxIn :: (TxInAnyEra, Maybe ZippedSpendingScript) -> ExceptT ShelleyTxCmdError IO (TxIn era)
-    toTxIn (TxInAnyEra txId xId tag, mPlutusScript) =
-      case plutusScriptsSupportedInEra era of
-        Nothing -> return $ TxIn txId xId NotPlutusInput
-        Just plutusInAlonzo ->
-          case (tag, mPlutusScript) of
-            (IsPlutusFee, Nothing) -> return $ TxIn txId xId $ PlutusFee plutusInAlonzo
-            (IsNotPlutusFee, Nothing) -> return $ TxIn txId xId NotPlutusInput
-            (IsPlutusFee, Just (ZippedSpendingScript sFile _ _)) ->
-              left $ ShelleyTxCmdPlutusScriptLockingPlutusFee sFile
-            (IsNotPlutusFee, Just (ZippedSpendingScript _ _ mDatum)) ->
-              return $ TxIn txId xId
-                     $ PlutusSpendingInput plutusInAlonzo (toScriptDatum mDatum)
+    toTxIn :: (TxInAnyEra, Maybe ZippedSpendingScript)
+           -> ExceptT ShelleyTxCmdError IO (TxIn, WitnessKind WitTxIn era, TxInUsedForFees era)
+    toTxIn (TxInAnyEra txId xId tag, mScript) =
+      -- Attempt to read script
+      case mScript of
+        -- No script file present, tx input locked by a key witness
+        Nothing -> return (TxIn txId xId, WitnessByKey, TxInNotInUseForFees)
+
+        -- Script file present, tx input locked by a script witness
+        Just (ZippedSpendingScript (ScriptFile fp) _ _) -> do
+          anyScript <- firstExceptT ShelleyTxCmdReadJsonFileError $ readFileScriptInAnyLang fp
+          scriptInEra <- validateScriptSupportedInEra era anyScript
+
+          case tag of
+            IsPlutusFee ->
+              case scriptInEra of
+                ScriptInEra _ (PlutusScript _ _) ->
+                  panic "Can't use plutus locked txin as plutus fee"
+                ScriptInEra sLangInera (SimpleScript _sVer sScript) ->
+                  return ( TxIn txId xId
+                         , WitnessByScript (SimpleScriptWitness sLangInera sScript)
+                         , TxInNotInUseForFees
+                         )
+            NotPlutusFee ->
+              case scriptInEra of
+               ScriptInEra sLangInera (PlutusScript _sVer pScript) ->
+                 return ( TxIn txId xId
+                        , WitnessByScript (PlutusScriptWitnessTxIn sLangInera pScript () ())
+                        , TxInNotInUseForFees
+                        )
+               ScriptInEra sLangInera (SimpleScript _sVer sScript) ->
+                 return ( TxIn txId xId
+                        , WitnessByScript (SimpleScriptWitness sLangInera sScript)
+                        , TxInNotInUseForFees
+                        )
+
 
 toScriptDatum :: Maybe Datum -> Maybe ScriptDatum
 toScriptDatum Nothing = Nothing
@@ -420,37 +444,6 @@ validateTxMetadataInEra era schema files =
       Just supported -> do
         metadata <- mconcat <$> mapM (readFileTxMetadata schema) files
         return (TxMetadataInEra supported metadata)
-
-
-validateTxAuxScripts :: CardanoEra era
-                     -> [ScriptFile]
-                     -> ExceptT ShelleyTxCmdError IO (TxAuxScripts era)
-validateTxAuxScripts _ [] = return TxAuxScriptsNone
-validateTxAuxScripts era files =
-  case auxScriptsSupportedInEra era of
-    Nothing -> txFeatureMismatch era TxFeatureAuxScripts
-    Just AuxScriptsInAllegraEra -> do
-      scripts <- sequence
-        [ do script <- firstExceptT ShelleyTxCmdReadJsonFileError $
-                         readFileScriptInAnyLang file
-             validateScriptSupportedInEra era script
-        | ScriptFile file <- files ]
-      return $ TxAuxScripts AuxScriptsInAllegraEra scripts
-    Just AuxScriptsInMaryEra -> do
-      scripts <- sequence
-        [ do script <- firstExceptT ShelleyTxCmdReadJsonFileError $
-                         readFileScriptInAnyLang file
-             validateScriptSupportedInEra era script
-        | ScriptFile file <- files ]
-      return (TxAuxScripts AuxScriptsInMaryEra scripts)
-    Just AuxScriptsInAlonzoEra -> do
-      scripts <- sequence
-        [ do script <- firstExceptT ShelleyTxCmdReadJsonFileError $
-                         readFileScriptInAnyLang file
-             validateScriptSupportedInEra era script
-        | ScriptFile file <- files ]
-      return (TxAuxScripts AuxScriptsInAlonzoEra scripts)
-
 
 validateTxWithdrawals :: CardanoEra era
                       -> [((StakeAddress, Lovelace), Maybe ZippedRewardingScript)]
@@ -547,7 +540,7 @@ validateTxMintValue era (Just (v, mScript)) =
     TxMintValue maSup (PlutusMinting pSup $ toScriptDatum mDatum) v'
 
 validateTxExecutionUnits :: CardanoEra era
-                         -> [TxIn era]
+                         -> [(TxIn, WitnessKind WitTxIn era, TxInUsedForFees era)]
                          -> TxWithdrawals era
                          -> TxCertificates era
                          -> TxMintValue era
@@ -555,13 +548,13 @@ validateTxExecutionUnits :: CardanoEra era
 validateTxExecutionUnits era _txIns _withD _certs _mint  =
   case executionUnitsSupportedInEra era of
     Just supported -> do
-      -- Calculate execution units here
+      --TODO: Only considier inputs marked as used for fees
       return $ TxExecutionUnits supported 0 0
     Nothing -> return TxExecutionUnitsNone
 
 validateTxWitnessPPData :: forall era. CardanoEra era
                         -> Maybe ProtocolParamsFile
-                        -> [TxIn era]
+                        -> [(TxIn, WitnessKind WitTxIn era, TxInUsedForFees era)]
                         -> TxMintValue era
                         -> TxCertificates era
                         -> TxWithdrawals era
@@ -579,16 +572,16 @@ validateTxWitnessPPData era mPParams txins _mMint _certifying _rewarding =
                 return $ TxWitnessPPData pparams (txInRedeemers txins)
     Nothing -> return TxWitnessPPDataNone
  where
-   txInRedeemers :: [TxIn era] -> [RedeemerPointer]
-   txInRedeemers ins  = go 0 ins
+   txInRedeemers :: [(TxIn, WitnessKind WitTxIn era, TxInUsedForFees era)] -> [RedeemerPointer]
+   txInRedeemers ins  = go  (0 :: Int) ins
      where
        go _ [] = []
-       go counter (TxIn _ _ txType : rest) =
-         case txType of
-           PlutusFee _ -> go (counter + 1) rest
-           (PlutusSpendingInput _ _) ->
-             SpendingRedeemer counter : go (counter + 1) rest
-           NotPlutusInput -> go (counter + 1) rest
+       go _counter ((TxIn _ _,_,_) : _rest) = panic ""
+        -- case txType of
+        --   PlutusFee _ -> go (counter + 1) rest
+        --   (PlutusSpendingInput _ _) ->
+        --     SpendingRedeemer counter : go (counter + 1) rest
+        --   NotPlutusInput -> go (counter + 1) rest
 
        _mintingRedeemers :: TxMintValue era -> Maybe RedeemerPointer
        _mintingRedeemers TxMintNone = Nothing

@@ -90,6 +90,7 @@ module Cardano.Api.Shelley
 
     -- * Scripts
     toShelleyScript,
+    toShelleyScript',
     toShelleyMultiSig,
     fromShelleyMultiSig,
     toAllegraTimelock,

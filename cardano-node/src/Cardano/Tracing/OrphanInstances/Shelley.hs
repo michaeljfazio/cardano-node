@@ -447,7 +447,7 @@ instance ( ShelleyBasedEra era
              , "error" .= String "Too many asset ids in the tx output"
              ]
 
-renderBadInputsUTxOErr ::  Set (TxIn era) -> Value
+renderBadInputsUTxOErr ::  Set TxIn -> Value
 renderBadInputsUTxOErr txIns
   | Set.null txIns = String "The transaction contains no inputs."
   | otherwise = String "The transaction contains inputs that do not exist in the UTxO set."

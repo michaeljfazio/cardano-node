@@ -162,7 +162,7 @@ txSpendGenesisUTxOByronPBFT gc nId sk (ByronAddress bAddr) outs =
 txSpendUTxOByronPBFT
   :: NetworkId
   -> SomeByronSigningKey
-  -> [TxIn ByronEra]
+  -> [TxIn]
   -> [TxOut ByronEra]
   -> Tx ByronEra
 txSpendUTxOByronPBFT nId sk txIn outs =

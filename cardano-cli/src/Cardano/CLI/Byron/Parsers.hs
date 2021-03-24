@@ -260,7 +260,7 @@ parseTestnetBalanceOptions =
           "delegate-share"
           "Portion of stake owned by all delegates together."
 
-parseTxIn :: Parser (TxIn ByronEra)
+parseTxIn :: Parser (TxIn)
 parseTxIn =
   option
   (readerFromAttoParser parseTxInAtto)
@@ -268,12 +268,11 @@ parseTxIn =
     <> metavar "(TXID,INDEX)"
     <> help "Transaction input is a pair of an UTxO TxId and a zero-based output index."
 
-parseTxInAtto :: Atto.Parser (TxIn ByronEra)
+parseTxInAtto :: Atto.Parser (TxIn)
 parseTxInAtto =
   TxIn
     <$> (Atto.char '(' *> parseTxIdAtto <* Atto.char ',')
     <*> (parseTxIxAtto <* Atto.char ')')
-    <*> return NotPlutusInput
 
 
 parseTxIdAtto :: Atto.Parser TxId
@@ -289,10 +288,10 @@ parseTxIxAtto = toEnum <$> Atto.decimal
 parseTxOut :: Parser (TxOut ByronEra)
 parseTxOut =
   option
-    ( uncurry TxOut
-      . first pAddressInEra
-      . second pLovelaceTxOut
-      <$> auto
+    ( panic "" -- uncurry TxOut
+      -- . first pAddressInEra
+      -- . second pLovelaceTxOut
+      -- <$> auto
     )
     $ long "txout"
       <> metavar "'(\"ADDR\", LOVELACE)'"

@@ -133,8 +133,9 @@ runQueryProtocolParameters (AnyConsensusModeParams cModeParams) network mOutFile
     Nothing -> left . ShelleyQueryCmdEraConsensusModeMismatch anyE $ AnyConsensusMode cMode
  where
   writeProtocolParameters
-    :: Maybe OutputFile
-    -> ProtocolParameters
+    :: IsCardanoEra era
+    => Maybe OutputFile
+    -> ProtocolParameters era
     -> ExceptT ShelleyQueryCmdError IO ()
   writeProtocolParameters mOutFile' pparams =
     case mOutFile' of
@@ -438,12 +439,12 @@ printFilteredUTxOs shelleyBasedEra' (UTxO utxo) = do
 
 printUtxo
   :: ShelleyBasedEra era
-  -> (TxIn era, TxOut era)
+  -> (TxIn, TxOut era)
   -> IO ()
 printUtxo shelleyBasedEra' txInOutTuple =
   case shelleyBasedEra' of
     ShelleyBasedEraShelley ->
-      let (TxIn (TxId txhash) (TxIx index) _PlutusTag, TxOut _ value) = txInOutTuple
+      let (TxIn (TxId txhash) (TxIx index), TxOut _ value _) = txInOutTuple
       in Text.putStrLn $
            mconcat
              [ Text.decodeLatin1 (hashToBytesAsHex txhash)
@@ -452,7 +453,7 @@ printUtxo shelleyBasedEra' txInOutTuple =
              ]
 
     ShelleyBasedEraAllegra ->
-      let (TxIn (TxId txhash) (TxIx index) _PlutusTag, TxOut _ value) = txInOutTuple
+      let (TxIn (TxId txhash) (TxIx index), TxOut _ value _) = txInOutTuple
       in Text.putStrLn $
            mconcat
              [ Text.decodeLatin1 (hashToBytesAsHex txhash)
@@ -460,7 +461,7 @@ printUtxo shelleyBasedEra' txInOutTuple =
              , "        " <> printableValue value
              ]
     ShelleyBasedEraMary ->
-      let (TxIn (TxId txhash) (TxIx index) _PlutusTag, TxOut _ value) = txInOutTuple
+      let (TxIn (TxId txhash) (TxIx index), TxOut _ value _) = txInOutTuple
       in Text.putStrLn $
            mconcat
              [ Text.decodeLatin1 (hashToBytesAsHex txhash)
@@ -468,7 +469,7 @@ printUtxo shelleyBasedEra' txInOutTuple =
              , "        " <> printableValue value
              ]
     ShelleyBasedEraAlonzo ->
-      let (TxIn (TxId txhash) (TxIx index) _PlutusTag, TxOut _ value) = txInOutTuple
+      let (TxIn (TxId txhash) (TxIx index), TxOut _ value _mDataHash) = txInOutTuple
       in Text.putStrLn $
            mconcat
              [ Text.decodeLatin1 (hashToBytesAsHex txhash)
@@ -642,4 +643,4 @@ obtainLedgerEraClassConstraints
 obtainLedgerEraClassConstraints ShelleyBasedEraShelley f = f
 obtainLedgerEraClassConstraints ShelleyBasedEraAllegra f = f
 obtainLedgerEraClassConstraints ShelleyBasedEraMary    f = f
-obtainLedgerEraClassConstraints ShelleyBasedEraAlonzo  f = f
+obtainLedgerEraClassConstraints ShelleyBasedEraAlonzo  _f = panic "TODO: f"

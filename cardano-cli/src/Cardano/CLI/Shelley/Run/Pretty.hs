@@ -21,7 +21,7 @@ prettyTx body0 =
   object $
   case body0 of
     ByronTxBody tx -> ["era" .= ("Byron" :: Text), "tx" .= tx]
-    ShelleyTxBody ShelleyBasedEraShelley body aux ->
+    ShelleyTxBody ShelleyBasedEraShelley body aux Nothing ->
       [ "era" .= ("Shelley" :: Text)
       , "inputs" .= _inputs
       , "outputs" .= _outputs
@@ -46,7 +46,7 @@ prettyTx body0 =
           } =
             body
         Shelley.Wdrl withdrawals = _wdrls
-    ShelleyTxBody ShelleyBasedEraAllegra body aux ->
+    ShelleyTxBody ShelleyBasedEraAllegra body aux Nothing ->
       [ "era" .= ("Allegra" :: Text)
       , "inputs" .= inputs
       , "outputs" .= outputs
@@ -71,7 +71,7 @@ prettyTx body0 =
           adHash
           mint =
             body
-    ShelleyTxBody ShelleyBasedEraMary body aux ->
+    ShelleyTxBody ShelleyBasedEraMary body aux Nothing ->
       [ "era" .= ("Mary" :: Text)
       , "inputs" .= inputs
       , "outputs" .= outputs
@@ -96,7 +96,8 @@ prettyTx body0 =
           adHash
           mint =
             body
-    ShelleyTxBody ShelleyBasedEraAlonzo _body _aux -> panic "TODO"
+    ShelleyTxBody ShelleyBasedEraAlonzo _body _aux Nothing -> panic "TODO"
+    _ -> panic "TODO"
 
 
 prettyValidityInterval :: ShelleyMA.ValidityInterval -> JSON.Value

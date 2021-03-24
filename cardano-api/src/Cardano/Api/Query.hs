@@ -165,7 +165,7 @@ deriving instance Show (QueryInShelleyBasedEra era result)
 newtype ByronUpdateState = ByronUpdateState Byron.Update.State
   deriving Show
 
-newtype UTxO era = UTxO (Map (TxIn era) (TxOut era))
+newtype UTxO era = UTxO (Map TxIn (TxOut era))
 
 instance IsCardanoEra era => ToJSON (UTxO era) where
   toJSON (UTxO m) = toJSON m
@@ -219,16 +219,16 @@ fromUTxO eraConversion utxo =
   case eraConversion of
     ShelleyBasedEraShelley ->
       let Shelley.UTxO sUtxo = utxo
-      in UTxO . Map.fromList . map (bimap (fromShelleyTxIn NotPlutusInput) fromShelleyTxOut) $ Map.toList sUtxo
+      in UTxO . Map.fromList . map (bimap fromShelleyTxIn fromShelleyTxOut) $ Map.toList sUtxo
     ShelleyBasedEraAllegra ->
       let Shelley.UTxO sUtxo = utxo
-      in UTxO . Map.fromList . map (bimap (fromShelleyTxIn NotPlutusInput) (\txo -> fromTxOut ShelleyBasedEraAllegra txo Shelley.SNothing)) $ Map.toList sUtxo
+      in UTxO . Map.fromList . map (bimap fromShelleyTxIn (\txo -> fromTxOut ShelleyBasedEraAllegra txo Shelley.SNothing)) $ Map.toList sUtxo
     ShelleyBasedEraMary ->
       let Shelley.UTxO sUtxo = utxo
-      in UTxO . Map.fromList . map (bimap (fromShelleyTxIn NotPlutusInput) (\txo -> fromTxOut ShelleyBasedEraMary txo Shelley.SNothing)) $ Map.toList sUtxo
+      in UTxO . Map.fromList . map (bimap fromShelleyTxIn (\txo -> fromTxOut ShelleyBasedEraMary txo Shelley.SNothing)) $ Map.toList sUtxo
     ShelleyBasedEraAlonzo ->
       let Shelley.UTxO sUtxo = utxo
-      in UTxO . Map.fromList . map (bimap (fromShelleyTxIn NotPlutusInput)
+      in UTxO . Map.fromList . map (bimap fromShelleyTxIn
                                    (\txo -> fromTxOut ShelleyBasedEraAlonzo txo (Shelley.SJust $ error "Waiting on eUTxO"))) $ Map.toList sUtxo
                                   --TODO: Will eUTxO distinguish between plutus fees and spending inputs?
 

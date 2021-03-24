@@ -211,7 +211,7 @@ runSpendUTxO
   -> ByronKeyFormat
   -> NewTxFile
   -> SigningKeyFile
-  -> [TxIn ByronEra]
+  -> [TxIn]
   -> [TxOut ByronEra]
   -> ExceptT ByronClientCmdError IO ()
 runSpendUTxO nw bKeyFormat (NewTxFile ctTx) ctKey ins outs = do

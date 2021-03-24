@@ -199,6 +199,7 @@ module Cardano.Api (
     PlutusScriptsSupportedInEra(..),
     CertificateTypeInEra(..),
     WithdrawalsTypeInEra(..),
+    TxInUsedForFees(..),
 
     -- ** Feature availability functions
     multiAssetSupportedInEra,
@@ -304,6 +305,10 @@ module Cardano.Api (
     toScriptInAnyLang,
 
     -- ** Scripts in a specific era
+    ScriptWitness(..),
+    WitTxIn,
+    WitMisc,
+    WitnessKind(..),
     ScriptInEra(..),
     toScriptInEra,
     eraOfScriptInEra,

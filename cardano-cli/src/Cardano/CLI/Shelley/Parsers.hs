@@ -520,7 +520,6 @@ pTransaction =
                                  <*> many pCertificateFile
                                  <*> many pWithdrawal
                                  <*> pTxMetadataJsonSchema
-                                 <*> many pScriptFile
                                  <*> optional pProtocolParamsFile
                                  <*> many pMetadataFile
                                  <*> optional pUpdateProposalFile
@@ -1555,13 +1554,14 @@ pCardanoEra = asum
   , pure (AnyCardanoEra MaryEra)
   ]
 
-pTxIn :: Parser (TxInAnyEra, Maybe ZippedSpendingScript)
+pTxIn :: Parser (TxInAnyEra, IsPlutusFee, Maybe ZippedSpendingScript)
 pTxIn = do
-  (,) <$> Opt.option (readerFromAttoParser parseTxInAny)
+  (,,) <$> Opt.option (readerFromAttoParser parseTxInAny)
              (  Opt.long "tx-in"
              <> Opt.metavar "TX-IN"
              <> Opt.help "The input transaction as TxId#TxIx where TxId is the transaction hash and TxIx is the index."
              )
+      <*> undefined
       <*> optional (ZippedSpendingScript <$> pScriptFile
                                          <*> some pRedeemer
                                          <*> optional parseDatum)
@@ -1571,10 +1571,10 @@ parseTxInAny :: Atto.Parser TxInAnyEra
 parseTxInAny = do
   txId <- parseTxId
   index <- Atto.char '#' *> parseTxIx
-  return $ TxInAnyEra txId index IsNotPlutusFee
+  return $ TxInAnyEra txId index NotPlutusFee
 
-renderTxIn :: TxIn era -> Text
-renderTxIn (TxIn txid (TxIx txix) _plutusFee) =
+renderTxIn :: TxIn -> Text
+renderTxIn (TxIn txid (TxIx txix)) =
   mconcat
     [ serialiseToRawBytesHexText txid
     , "#"

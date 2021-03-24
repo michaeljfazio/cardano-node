@@ -336,7 +336,7 @@ genTxBodyByron = do
     Left err -> fail (show err)
     Right txBody -> pure txBody
 
-genTxIn :: Gen (TxIn era)
+genTxIn :: Gen TxIn
 genTxIn = TxIn <$> genTxId <*> genTxIndex <*> return NotPlutusInput
 
 genTxId :: Gen TxId

@@ -24,6 +24,11 @@ module Cardano.Api.Script (
     toScriptInAnyLang,
 
     -- * Scripts in an era
+    ScriptWitness(..),
+    Redeemer,
+    TxOutDatum,
+    WitTxIn,
+    WitMisc,
     ScriptInEra(..),
     toScriptInEra,
     eraOfScriptInEra,
@@ -49,6 +54,7 @@ module Cardano.Api.Script (
 
     -- * Internal conversion functions
     toShelleyScript,
+    toShelleyScript',
     toShelleyMultiSig,
     fromShelleyMultiSig,
     toAllegraTimelock,
@@ -494,6 +500,55 @@ newtype ScriptDatum = ScriptDatum ()
 -- Scripts in the context of a ledger era
 --
 
+-- | A tag type for the context in which a script is used in a transaction.
+--
+-- This type tags the context as being to witness a transaction input.
+--
+data WitTxIn
+
+-- | A tag type for the context in which a script is used in a transaction.
+--
+-- This type tags the context as being to witness miscellaneous uses: minting,
+-- certificates and withdrawals. This is all uses /except/ transaction inputs.
+--
+data WitMisc
+
+-- | A /use/ of a script within a transaction body to witness something is being
+-- used in an authorised manner. That thing can be
+--
+-- * spending a transaction input
+-- * minting tokens
+-- * using a certificate
+-- * withdrawing from a reward account
+--
+-- For simple script languages, the use of the script is the same in all
+-- contexts. For Plutus scripts, using a script involes supplying a redeemer.
+-- In addition, Plutus scripts used for spending inputs must also supply the
+-- datum value used when originally creating the TxOut that is now being spent.
+--
+data ScriptWitness witctx era where
+
+     SimpleScriptWitness      :: ScriptLanguageInEra lang era
+                              -> SimpleScript lang
+                              -> ScriptWitness witctx era
+
+     PlutusScriptWitnessTxIn  :: ScriptLanguageInEra lang era
+                              -> PlutusScript lang
+                              -> Redeemer
+                              -> TxOutDatum
+                              -> ScriptWitness WitTxIn era
+
+     PlutusScriptWitnessTxEtc :: ScriptLanguageInEra lang era
+                              -> PlutusScript lang
+                              -> Redeemer
+                              -> ScriptWitness WitMisc era
+
+deriving instance Show (ScriptWitness witctx era)
+instance Eq (ScriptWitness witctx era) where
+  (==) = undefined
+
+type Redeemer   = ()
+type TxOutDatum = ()
 data ScriptInEra era where
      ScriptInEra :: ScriptLanguageInEra lang era
                  -> Script lang
@@ -764,6 +819,26 @@ deriving instance Show (PlutusScript lang)
 -- ----------------------------------------------------------------------------
 -- Conversion functions
 --
+
+toShelleyScript' :: ScriptWitness witctx era -> Maybe (Ledger.Script (ShelleyLedgerEra era))
+toShelleyScript' (SimpleScriptWitness sLangInEra sScript)  =
+  case sLangInEra of
+    SimpleScriptV1InShelley -> Just $ toShelleyMultiSig sScript
+    SimpleScriptV1InAllegra -> Just $ toAllegraTimelock sScript
+    SimpleScriptV1InMary    -> Just $ toAllegraTimelock sScript
+    SimpleScriptV1InAlonzo  -> error "toAllegraTimelock script"
+    SimpleScriptV2InAllegra -> Just $ toAllegraTimelock sScript
+    SimpleScriptV2InMary    -> Just $ toAllegraTimelock sScript
+    SimpleScriptV2InAlonzo  -> error "toAllegraTimelock script"
+    PlutusScriptV1InAlonzo  -> Nothing
+toShelleyScript' (PlutusScriptWitnessTxIn sLangInEra _pScript _rdmr _txOutDatum) =
+  case sLangInEra of
+    PlutusScriptV1InAlonzo -> Just $ error "TODO"
+    _ -> error "pattern matches"
+toShelleyScript' (PlutusScriptWitnessTxEtc sLangInEra _pScript _rdmr) =
+  case sLangInEra of
+    PlutusScriptV1InAlonzo -> Just $ error "TODO"
+    _ -> error "pattern matches"
 
 toShelleyScript :: ScriptInEra era -> Ledger.Script (ShelleyLedgerEra era)
 toShelleyScript (ScriptInEra langInEra (SimpleScript SimpleScriptV1 script)) =
