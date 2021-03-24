@@ -76,6 +76,11 @@ jobs:
       run: |
         cat ${{ env.PLAN_JSON }} | jq -r '."install-plan"[].id' | sort | uniq > dependencies.txt
 
+    - name: Dry run
+      run: |
+        mkdir ./haddocks
+        DRY_RUN=1 ./scripts/haddocs.sh ./haddocks true "$CABAL_BUILDDIR"
+
     - name: Restore cabal cache
       uses: haskell-works/cabal-cache-action@v1
       env:
@@ -93,31 +98,8 @@ jobs:
             --region        "$BINARY_CACHE_REGION" \
             --store-path    "${{ steps.setup-haskell.outputs.cabal-store }}"
 
-    - name: Install dependencies
-      run: cabal build all --builddir="$CABAL_BUILDDIR" --only-dependencies
-
-    - name: Save cabal cache
-      uses: haskell-works/cabal-cache-action@v1
-      if: ${{ always() }}
-      env:
-        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        BINARY_CACHE_THREADS: ${{ secrets.BINARY_CACHE_THREADS }}
-        BINARY_CACHE_REGION: ${{ secrets.BINARY_CACHE_REGION }}
-        BINARY_CACHE_URI: ${{ secrets.BINARY_CACHE_URI }}
-      with:
-        args: |
-          sync-to-archive \
-            --build-path    "$CABAL_BUILDDIR" \
-            --threads       "$BINARY_CACHE_THREADS" \
-            --archive-uri   "$BINARY_CACHE_URI" \
-            --region        "$BINARY_CACHE_REGION" \
-            --store-path    "${{ steps.setup-haskell.outputs.cabal-store }}"
-
     - name: Build Haddock documentation 🔧
-      run: |
-        mkdir ./haddocks
-        ./scripts/haddocs.sh ./haddocks true "$CABAL_BUILDDIR"
+      run: ./scripts/haddocs.sh ./haddocks true "$CABAL_BUILDDIR"
 
     - name: Save cabal cache
       uses: haskell-works/cabal-cache-action@v1
