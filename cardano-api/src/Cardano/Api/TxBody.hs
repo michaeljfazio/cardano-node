@@ -41,7 +41,6 @@ module Cardano.Api.TxBody (
     -- * Transaction outputs
     TxOut(..),
     TxOutValue(..),
-    MintTypeInEra(..),
     DataHash(..),
 
     -- * Tx witnesses
@@ -420,16 +419,6 @@ instance IsCardanoEra era => ToJSON (TxOut era) where
 
 deriving instance Eq   (TxOut era)
 deriving instance Show (TxOut era)
-
-data MintTypeInEra era where
-  NoPlutusScript :: MintTypeInEra era
-  PlutusMinting  :: PlutusScriptsSupportedInEra era
-                 -> Maybe ScriptDatum
-                 -> MintTypeInEra era
-
-deriving instance Eq   (MintTypeInEra era)
-deriving instance Show (MintTypeInEra era)
-
 
 toByronTxOut :: TxOut ByronEra -> Maybe Byron.TxOut
 toByronTxOut (TxOut (AddressInEra ByronAddressInAnyEra (ByronAddress addr))
@@ -953,7 +942,8 @@ data TxMintValue era where
 
      TxMintNone  :: TxMintValue era
 
-     TxMintValue :: MultiAssetSupportedInEra era -> MintTypeInEra era
+     TxMintValue :: MultiAssetSupportedInEra era
+                 -> [ScriptWitness WitMisc era]
                  -> Value -> TxMintValue era
 
 deriving instance Eq   (TxMintValue era)

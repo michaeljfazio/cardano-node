@@ -103,7 +103,7 @@ data SigningKeyOrScriptFile = ScriptFileForWitness FilePath
 data TxOutAnyEra = TxOutAnyEra AddressAny Value
   deriving (Eq, Show)
 
-data TxInAnyEra = TxInAnyEra TxId TxIx IsPlutusFee
+data TxInAnyEra = TxInAnyEra TxId TxIx
   deriving Show
 
 newtype ProtocolParamsFile = ProtocolParamsFile FilePath
@@ -126,7 +126,7 @@ data ZippedSpendingScript = ZippedSpendingScript ScriptFile [Redeemer] (Maybe Da
                           deriving Show
 
 -- | Validates minting new tokens
-data ZippedMintingScript = ZippedMintingScript ScriptFile [Redeemer] (Maybe Datum)
+data ZippedMintingScript = ZippedMintingScript ScriptFile Redeemer
                          deriving Show
 
 -- | Validates withdrawl from a reward account

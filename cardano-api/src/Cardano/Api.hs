@@ -164,7 +164,6 @@ module Cardano.Api (
     -- ** Transaction outputs
     TxOut(TxOut),
     TxOutValue(..),
-    MintTypeInEra(..),
     DataHash(..),
 
     -- ** Other transaction body types

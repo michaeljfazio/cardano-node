@@ -1561,7 +1561,7 @@ pTxIn = do
              <> Opt.metavar "TX-IN"
              <> Opt.help "The input transaction as TxId#TxIx where TxId is the transaction hash and TxIx is the index."
              )
-      <*> undefined
+      <*> undefined -- parse IsPlutusFee
       <*> optional (ZippedSpendingScript <$> pScriptFile
                                          <*> some pRedeemer
                                          <*> optional parseDatum)
@@ -1571,7 +1571,7 @@ parseTxInAny :: Atto.Parser TxInAnyEra
 parseTxInAny = do
   txId <- parseTxId
   index <- Atto.char '#' *> parseTxIx
-  return $ TxInAnyEra txId index NotPlutusFee
+  return $ TxInAnyEra txId index
 
 renderTxIn :: TxIn -> Text
 renderTxIn (TxIn txid (TxIx txix)) =
@@ -1603,7 +1603,7 @@ pTxOut = Opt.option (readerFromParsecParser parseTxOutAnyEra)
                        \a non-native script (e.g Plutus Core)"
            )
 
-pMintMultiAsset :: Parser (Value, Maybe ZippedMintingScript)
+pMintMultiAsset :: Parser (Value, [ZippedMintingScript])
 pMintMultiAsset =
   (,) <$> Opt.option
            (readerFromParsecParser parseValue)
@@ -1611,9 +1611,8 @@ pMintMultiAsset =
              <> Opt.metavar "VALUE"
              <> Opt.help "Mint multi-asset value(s) with the multi-asset cli syntax"
              )
-      <*> optional (ZippedMintingScript <$> pScriptFile
-                                        <*> some pRedeemer
-                                        <*> optional parseDatum)
+      <*> some (ZippedMintingScript <$> pScriptFile
+                                    <*> pRedeemer)
 
 
 pInvalidBefore :: Parser SlotNo

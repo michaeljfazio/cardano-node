@@ -234,7 +234,7 @@ runTransactionCmd cmd =
 
 runTxBuildRaw
   :: AnyCardanoEra
-  -> [(TxInAnyEra, Maybe ZippedSpendingScript)]
+  -> [(TxInAnyEra, IsPlutusFee, Maybe ZippedSpendingScript)]
   -> [TxOutAnyEra]
   -> Maybe SlotNo
   -- ^ Tx lower bound
@@ -242,7 +242,7 @@ runTxBuildRaw
   -- ^ Tx upper bound
   -> Maybe Lovelace
   -- ^ Tx fee
-  -> Maybe (Value, Maybe ZippedMintingScript)
+  -> Maybe (Value, [ZippedMintingScript])
   -- ^ Multi-Asset value
   -> [(CertificateFile, Maybe ZippedCertifyingScript)]
   -> [((StakeAddress, Lovelace), Maybe ZippedRewardingScript)]
@@ -317,13 +317,13 @@ txFeatureMismatch era feature =
 
 validateTxIns :: forall era.
                  CardanoEra era
-              -> [(TxInAnyEra, Maybe ZippedSpendingScript)]
+              -> [(TxInAnyEra, IsPlutusFee, Maybe ZippedSpendingScript)]
               -> ExceptT ShelleyTxCmdError IO [(TxIn, WitnessKind WitTxIn era, TxInUsedForFees era)]
 validateTxIns era = mapM toTxIn
   where
-    toTxIn :: (TxInAnyEra, Maybe ZippedSpendingScript)
+    toTxIn :: (TxInAnyEra, IsPlutusFee, Maybe ZippedSpendingScript)
            -> ExceptT ShelleyTxCmdError IO (TxIn, WitnessKind WitTxIn era, TxInUsedForFees era)
-    toTxIn (TxInAnyEra txId xId tag, mScript) =
+    toTxIn (TxInAnyEra txId xId, tag, mScript) =
       -- Attempt to read script
       case mScript of
         -- No script file present, tx input locked by a key witness
@@ -519,25 +519,26 @@ validateTxUpdateProposal era (Just (UpdateProposalFile file)) =
 
 
 validateTxMintValue :: CardanoEra era
-                    -> Maybe (Value, Maybe ZippedMintingScript)
+                    -> Maybe (Value, [ZippedMintingScript])
                     -> ExceptT ShelleyTxCmdError IO (TxMintValue era)
 validateTxMintValue _ Nothing = return TxMintNone
-validateTxMintValue era (Just (v, mScript)) =
+validateTxMintValue era (Just (v, zippedScripts)) =
     case multiAssetSupportedInEra era of
       Left _ -> txFeatureMismatch era TxFeatureMintValue
-      Right supported' ->
-        case plutusScriptsSupportedInEra era of
-          Just supported -> return $ toMintingScript supported' supported (v, mScript)
-          Nothing -> return (TxMintValue supported' NoPlutusScript v)
+      Right supported -> do
+          let scriptWits = map getScriptWitness zippedScripts
+          in return $ TxMintValue supported scriptWits v
  where
-  toMintingScript :: MultiAssetSupportedInEra era
-                  -> PlutusScriptsSupportedInEra era
-                  -> (Value, Maybe ZippedMintingScript)
-                  -> TxMintValue era
-  toMintingScript maSup _ (_, Nothing) =
-    TxMintValue maSup NoPlutusScript v
-  toMintingScript maSup pSup (v', Just (ZippedMintingScript _ _ mDatum)) =
-    TxMintValue maSup (PlutusMinting pSup $ toScriptDatum mDatum) v'
+  getScriptWitness :: ZippedMintingScript -> ScriptWitness WitMisc era
+  getScriptWitness (ZippedMintingScript sFile _rdmr) = do
+    -- Determine what kind of script we have and if its valid in the given era
+    anyScript <- firstExceptT ShelleyTxCmdReadJsonFileError $ readFileScriptInAnyLang fp
+    scriptInEra <- validateScriptSupportedInEra era anyScript
+    case scriptInEra of
+      ScriptInEra sLangInera (PlutusScript _sVer pScript) ->
+        PlutusScriptWitnessTxEtc sLangInera pScript ()
+      ScriptInEra sLangInera (SimpleScript _sVer sScript) ->
+        SimpleScriptWitness sLangInera sScript
 
 validateTxExecutionUnits :: CardanoEra era
                          -> [(TxIn, WitnessKind WitTxIn era, TxInUsedForFees era)]

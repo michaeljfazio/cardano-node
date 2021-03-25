@@ -163,7 +163,7 @@ data TransactionCmd
       AnyCardanoEra
       [(TxInAnyEra, IsPlutusFee, Maybe ZippedSpendingScript)]
       [TxOutAnyEra]
-      (Maybe (Value, Maybe ZippedMintingScript))
+      (Maybe (Value, [ZippedMintingScript]))
       -- ^ Multi-Asset value
       (Maybe SlotNo)
       -- ^ Transaction lower bound

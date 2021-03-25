@@ -337,7 +337,7 @@ genTxBodyByron = do
     Right txBody -> pure txBody
 
 genTxIn :: Gen TxIn
-genTxIn = TxIn <$> genTxId <*> genTxIndex <*> return NotPlutusInput
+genTxIn = TxIn <$> genTxId <*> genTxIndex
 
 genTxId :: Gen TxId
 genTxId = TxId <$> genShelleyHash
@@ -431,21 +431,6 @@ genTxMetadataInEra era =
         , TxMetadataInEra TxMetadataInAlonzoEra <$> genTxMetadata
         ]
 
-genTxAuxScripts :: CardanoEra era -> Gen (TxAuxScripts era)
-genTxAuxScripts era =
-  case era of
-    ByronEra   -> pure TxAuxScriptsNone
-    ShelleyEra -> pure TxAuxScriptsNone
-    AllegraEra -> TxAuxScripts AuxScriptsInAllegraEra
-                           <$> Gen.list (Range.linear 0 3)
-                                        (genScriptInEra AllegraEra)
-    MaryEra    -> TxAuxScripts AuxScriptsInMaryEra
-                           <$> Gen.list (Range.linear 0 3)
-                                        (genScriptInEra MaryEra)
-    AlonzoEra  -> TxAuxScripts AuxScriptsInAlonzoEra
-                           <$> Gen.list (Range.linear 0 3)
-                                        (genScriptInEra AlonzoEra)
-
 genTxWithdrawals :: CardanoEra era -> Gen (TxWithdrawals era)
 genTxWithdrawals era =
   case era of
@@ -533,7 +518,7 @@ genTxMintValue era =
     MaryEra ->
       Gen.choice
         [ pure TxMintNone
-        , TxMintValue MultiAssetInMaryEra NoPlutusScript <$> genValueForMinting
+        , TxMintValue MultiAssetInMaryEra (panic "ScriptWitnes") <$> genValueForMinting
         ]
     AlonzoEra ->
       Gen.choice
@@ -557,7 +542,6 @@ genTxBodyContent era = do
   fee <- genTxFee era
   validityRange <- genTxValidityRange era
   txMd <- genTxMetadataInEra era
-  auxScripts <- genTxAuxScripts era
   withdrawals <- genTxWithdrawals era
   certs <- genTxCertificates era
   updateProposal <- genTxUpdateProposal era
@@ -565,12 +549,11 @@ genTxBodyContent era = do
   txExecUnits <- genTxExecutionUnits era
 
   pure $ TxBodyContent
-    { txIns = panic "TODO" --trxIns
+    { txInsAndWits = panic "TODO" --trxIns
     , txOuts = trxOuts
     , txFee = fee
     , txValidityRange = validityRange
     , txMetadata = txMd
-    , txAuxScripts = auxScripts
     , txWithdrawals = withdrawals
     , txCertificates = certs
     , txUpdateProposal = updateProposal
