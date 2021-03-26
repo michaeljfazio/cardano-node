@@ -130,7 +130,7 @@ data ZippedMintingScript = ZippedMintingScript ScriptFile Redeemer
                          deriving Show
 
 -- | Validates withdrawl from a reward account
-data ZippedRewardingScript = ZippedRewardingScript ScriptFile [Redeemer] (Maybe Datum)
+data ZippedRewardingScript = ZippedRewardingScript ScriptFile Redeemer
                            deriving Show
 
 

@@ -309,6 +309,9 @@ data WitnessKind witctx era where
    WitnessByKey :: WitnessKind witctx era
    WitnessByScript :: ScriptWitness witctx era -> WitnessKind witctx era
 
+deriving instance Eq   (WitnessKind witctx era)
+deriving instance Show (WitnessKind witctx era)
+
 -- | The 'RedeemerPointer' gives us the index
 -- at which the redeemer exists within a transaction body.
 
@@ -877,7 +880,7 @@ data TxWithdrawals era where
      TxWithdrawalsNone :: TxWithdrawals era
 
      TxWithdrawals     :: WithdrawalsSupportedInEra era
-                       -> [((StakeAddress, Lovelace), WithdrawalsTypeInEra era)]
+                       -> [(StakeAddress, Lovelace, WitnessKind WitMisc era)]
                        -> TxWithdrawals era
 
 deriving instance Eq   (TxWithdrawals era)
@@ -1351,7 +1354,7 @@ makeShelleyTransactionBody era@ShelleyBasedEraShelley
                  $ map (\(c,_) -> toShelleyCertificate c) cs)
           (case txWithdrawals of
              TxWithdrawalsNone  -> Shelley.Wdrl Map.empty
-             TxWithdrawals _ ws -> toShelleyWithdrawal $ map fst ws)
+             TxWithdrawals _ ws -> toShelleyWithdrawal ws)
           (case txFee of
              TxFeeImplicit era'  -> case era' of {}
              TxFeeExplicit _ fee -> toShelleyLovelace fee)
@@ -1411,7 +1414,7 @@ makeShelleyTransactionBody era@ShelleyBasedEraAllegra
                Seq.fromList $ map (\(c,_) -> toShelleyCertificate c) cs)
           (case txWithdrawals of
              TxWithdrawalsNone  -> Shelley.Wdrl Map.empty
-             TxWithdrawals _ ws -> toShelleyWithdrawal $ map fst ws)
+             TxWithdrawals _ ws -> toShelleyWithdrawal ws)
           (case txFee of
              TxFeeImplicit era'  -> case era' of {}
              TxFeeExplicit _ fee -> toShelleyLovelace fee)
@@ -1488,7 +1491,7 @@ makeShelleyTransactionBody era@ShelleyBasedEraMary
              TxCertificates _ cs -> Seq.fromList $ map (\(c,_) -> toShelleyCertificate c) cs)
           (case txWithdrawals of
              TxWithdrawalsNone  -> Shelley.Wdrl Map.empty
-             TxWithdrawals _ ws -> toShelleyWithdrawal $ map fst ws)
+             TxWithdrawals _ ws -> toShelleyWithdrawal ws)
           (case txFee of
              TxFeeImplicit era'  -> case era' of {}
              TxFeeExplicit _ fee -> toShelleyLovelace fee)
@@ -1585,7 +1588,7 @@ makeShelleyTransactionBody era@ShelleyBasedEraAlonzo
                                       $ map (\(c,_mPlutusScripts) -> toShelleyCertificate c) cs) --TODO: Need to handle this
           (case txWithdrawals of
              TxWithdrawalsNone  -> Shelley.Wdrl Map.empty
-             TxWithdrawals _ ws -> toShelleyWithdrawal $ map fst ws)
+             TxWithdrawals _ ws -> toShelleyWithdrawal ws)
           (case txFee of
              TxFeeImplicit era'  -> case era' of {}
              TxFeeExplicit _ fee -> toShelleyLovelace fee)
@@ -1625,12 +1628,12 @@ makeShelleyTransactionBody era@ShelleyBasedEraAlonzo
 
        scriptWits = [ sWit | (_, WitnessByScript sWit,_) <- txInsAndWits ]
 
-toShelleyWithdrawal :: [(StakeAddress, Lovelace)] -> Shelley.Wdrl StandardCrypto
+toShelleyWithdrawal :: [(StakeAddress, Lovelace, WitnessKind WitMisc era)] -> Shelley.Wdrl StandardCrypto
 toShelleyWithdrawal withdrawals =
     Shelley.Wdrl $
       Map.fromList
         [ (toShelleyStakeAddr stakeAddr, toShelleyLovelace value)
-        | (stakeAddr, value) <- withdrawals ]
+        | (stakeAddr, value, _) <- withdrawals ]
 
 -- | In the Shelley era the auxiliary data consists only of the tx metadata
 toShelleyAuxiliaryData :: Map Word64 TxMetadataValue
@@ -1708,7 +1711,7 @@ makeShelleyTransaction :: [(TxIn, WitnessKind WitTxIn ShelleyEra, TxInUsedForFee
                        -> SlotNo
                        -> Lovelace
                        -> [(Certificate, CertificateTypeInEra ShelleyEra)]
-                       -> [(StakeAddress, Lovelace)]
+                       -> [(StakeAddress, Lovelace, WitnessKind WitMisc ShelleyEra)]
                        -> Maybe TxMetadata
                        -> Maybe UpdateProposal
                        -> Either (TxBodyError ShelleyEra) (TxBody ShelleyEra)
@@ -1726,7 +1729,7 @@ makeShelleyTransaction txInsAndWits txOuts ttl fee
                              Nothing -> TxMetadataNone
                              Just md -> TxMetadataInEra
                                           TxMetadataInShelleyEra md,
-        txWithdrawals    = TxWithdrawals WithdrawalsInShelleyEra $ map (\(s,l) -> ((s, l), NoPlutusScriptReward)) withdrawals,
+        txWithdrawals    = TxWithdrawals WithdrawalsInShelleyEra withdrawals,
         txCertificates   = TxCertificates CertificatesInShelleyEra certs,
         txUpdateProposal = case mUpdateProp of
                              Nothing -> TxUpdateProposalNone

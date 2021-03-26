@@ -3,6 +3,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE TypeApplications #-}
 
 {-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
 
@@ -445,28 +446,33 @@ validateTxMetadataInEra era schema files =
         metadata <- mconcat <$> mapM (readFileTxMetadata schema) files
         return (TxMetadataInEra supported metadata)
 
-validateTxWithdrawals :: CardanoEra era
+validateTxWithdrawals :: forall era. CardanoEra era
                       -> [((StakeAddress, Lovelace), Maybe ZippedRewardingScript)]
                       -> ExceptT ShelleyTxCmdError IO (TxWithdrawals era)
 validateTxWithdrawals _ [] = return TxWithdrawalsNone
 validateTxWithdrawals era withdrawals =
     case withdrawalsSupportedInEra era of
       Nothing -> txFeatureMismatch era TxFeatureWithdrawals
-      Just supported -> return (TxWithdrawals supported
-                          $ map (toRewarding $ plutusScriptsSupportedInEra era) withdrawals)
+      Just supported -> do
+        tups <- mapM toWithdrawal withdrawals
+        return $ TxWithdrawals supported tups
  where
-  toRewarding :: Maybe (PlutusScriptsSupportedInEra era)
-              -> ((StakeAddress, Lovelace), Maybe ZippedRewardingScript)
-              -> ((StakeAddress, Lovelace), WithdrawalsTypeInEra era)
-  toRewarding (Just supported') tup =
-    case tup of
-      (withD, Just (ZippedRewardingScript _ _ mDatum)) ->
-        (withD, PlutusRewarding supported' (toScriptDatum mDatum))
-      (withD, Nothing) ->
-        (withD, NoPlutusScriptReward)
+  toWithdrawal :: ((StakeAddress, Lovelace), Maybe ZippedRewardingScript)
+               -> ExceptT ShelleyTxCmdError IO (StakeAddress, Lovelace, WitnessKind WitMisc era)
+  toWithdrawal ((sAddr,ll), mZipped) =
+    case mZipped of
+      Just (ZippedRewardingScript (ScriptFile fp) _rdmr) -> do
+        -- Determine what kind of script we have and if its valid in the given era
+        anyScript <- firstExceptT ShelleyTxCmdReadJsonFileError $ readFileScriptInAnyLang fp
+        scriptInEra <- validateScriptSupportedInEra era anyScript
+        case scriptInEra of
+          ScriptInEra sLangInera (PlutusScript _sVer pScript) ->
+            return (sAddr, ll, WitnessByScript $ PlutusScriptWitnessTxEtc sLangInera pScript ())
+          ScriptInEra sLangInera (SimpleScript _sVer sScript) ->
+            return (sAddr, ll, WitnessByScript $ SimpleScriptWitness sLangInera sScript)
+      Nothing -> return (sAddr, ll, WitnessByKey)
 
-  toRewarding Nothing (withD, _) =
-    (withD, NoPlutusScriptReward)
+
 
 
 validateTxCertificates :: CardanoEra era
@@ -518,7 +524,7 @@ validateTxUpdateProposal era (Just (UpdateProposalFile file)) =
          return (TxUpdateProposal supported prop)
 
 
-validateTxMintValue :: CardanoEra era
+validateTxMintValue :: forall era. CardanoEra era
                     -> Maybe (Value, [ZippedMintingScript])
                     -> ExceptT ShelleyTxCmdError IO (TxMintValue era)
 validateTxMintValue _ Nothing = return TxMintNone
@@ -526,19 +532,19 @@ validateTxMintValue era (Just (v, zippedScripts)) =
     case multiAssetSupportedInEra era of
       Left _ -> txFeatureMismatch era TxFeatureMintValue
       Right supported -> do
-          let scriptWits = map getScriptWitness zippedScripts
-          in return $ TxMintValue supported scriptWits v
+          scriptWits <- mapM getScriptWitness zippedScripts
+          return $ TxMintValue supported scriptWits v
  where
-  getScriptWitness :: ZippedMintingScript -> ScriptWitness WitMisc era
-  getScriptWitness (ZippedMintingScript sFile _rdmr) = do
+  getScriptWitness :: ZippedMintingScript -> ExceptT ShelleyTxCmdError IO (ScriptWitness WitMisc era)
+  getScriptWitness (ZippedMintingScript (ScriptFile fp) _rdmr) = do
     -- Determine what kind of script we have and if its valid in the given era
     anyScript <- firstExceptT ShelleyTxCmdReadJsonFileError $ readFileScriptInAnyLang fp
     scriptInEra <- validateScriptSupportedInEra era anyScript
     case scriptInEra of
       ScriptInEra sLangInera (PlutusScript _sVer pScript) ->
-        PlutusScriptWitnessTxEtc sLangInera pScript ()
+        return $ PlutusScriptWitnessTxEtc sLangInera pScript ()
       ScriptInEra sLangInera (SimpleScript _sVer sScript) ->
-        SimpleScriptWitness sLangInera sScript
+        return $ SimpleScriptWitness sLangInera sScript
 
 validateTxExecutionUnits :: CardanoEra era
                          -> [(TxIn, WitnessKind WitTxIn era, TxInUsedForFees era)]
@@ -586,10 +592,7 @@ validateTxWitnessPPData era mPParams txins _mMint _certifying _rewarding =
 
        _mintingRedeemers :: TxMintValue era -> Maybe RedeemerPointer
        _mintingRedeemers TxMintNone = Nothing
-       _mintingRedeemers (TxMintValue _ mType _val)  =
-         case mType of
-           NoPlutusScript -> Nothing
-           PlutusMinting _ _ -> panic "TODO: Should be only one MA present."
+       _mintingRedeemers (TxMintValue _ _mType _val)  = panic "todo"
 
 
 

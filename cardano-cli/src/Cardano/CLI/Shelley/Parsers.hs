@@ -1113,8 +1113,7 @@ pWithdrawal =
                           \followed by the amount in Lovelace."
               )
         <*> optional (ZippedRewardingScript <$> pScriptFile
-                                            <*> some pRedeemer
-                                            <*> optional parseDatum)
+                                            <*> pRedeemer)
   where
     parseWithdrawal :: Atto.Parser (StakeAddress, Lovelace)
     parseWithdrawal =
