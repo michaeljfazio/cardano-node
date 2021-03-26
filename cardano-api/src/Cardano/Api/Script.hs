@@ -24,6 +24,7 @@ module Cardano.Api.Script (
     toScriptInAnyLang,
 
     -- * Scripts in an era
+    WitnessKind(..),
     ScriptWitness(..),
     Redeemer,
     TxOutDatum,
@@ -544,11 +545,36 @@ data ScriptWitness witctx era where
                               -> ScriptWitness WitMisc era
 
 deriving instance Show (ScriptWitness witctx era)
+
 instance Eq (ScriptWitness witctx era) where
-  (==) = undefined
+  (==) (SimpleScriptWitness sLangInEraA aScriptA)
+       (SimpleScriptWitness sLangInEraB aScriptB) = case testEquality aScriptA aScriptB of
+                                                      Just Refl ->
+                                                        case testEquality sLangInEraA sLangInEraB of
+                                                          Just Refl -> True
+                                                          Nothing -> False
+                                                      Nothing -> False
+
+  (==) _ _ = False
+
+instance Ord (ScriptWitness witctx era) where
+  compare _ _ = undefined
 
 type Redeemer   = ()
 type TxOutDatum = ()
+
+-- ----------------------------------------------------------------------------
+-- The kind of witness to use, key (signature) or script
+--
+
+data WitnessKind witctx era where
+   WitnessByKey :: WitnessKind witctx era
+   WitnessByScript :: ScriptWitness witctx era -> WitnessKind witctx era
+
+deriving instance Eq   (WitnessKind witctx era)
+deriving instance Show (WitnessKind witctx era)
+deriving instance Ord  (WitnessKind witctx era)
+
 data ScriptInEra era where
      ScriptInEra :: ScriptLanguageInEra lang era
                  -> Script lang
@@ -581,6 +607,17 @@ data ScriptLanguageInEra lang era where
 
 deriving instance Eq   (ScriptLanguageInEra lang era)
 deriving instance Show (ScriptLanguageInEra lang era)
+
+instance TestEquality (ScriptLanguageInEra lang) where
+  testEquality SimpleScriptV1InShelley SimpleScriptV1InShelley = Just Refl
+  testEquality SimpleScriptV1InAllegra SimpleScriptV1InAllegra = Just Refl
+  testEquality SimpleScriptV1InMary    SimpleScriptV1InMary    = Just Refl
+  testEquality SimpleScriptV1InAlonzo  SimpleScriptV1InAlonzo  = Just Refl
+  testEquality SimpleScriptV2InAllegra SimpleScriptV2InAllegra = Just Refl
+  testEquality SimpleScriptV2InMary    SimpleScriptV2InMary    = Just Refl
+  testEquality SimpleScriptV2InAlonzo  SimpleScriptV2InAlonzo  = Just Refl
+  testEquality PlutusScriptV1InAlonzo  PlutusScriptV1InAlonzo  = Just Refl
+  testEquality _                       _                       = Nothing
 
 instance HasTypeProxy era => HasTypeProxy (ScriptInEra era) where
     data AsType (ScriptInEra era) = AsScriptInEra (AsType era)
@@ -761,6 +798,9 @@ data SimpleScript lang where
 deriving instance Eq   (SimpleScript lang)
 deriving instance Show (SimpleScript lang)
 
+instance TestEquality SimpleScript where
+  testEquality (RequireSignature _) (RequireSignature _) = Nothing --TODO:Jordan
+  testEquality _ _ = Nothing
 
 -- | Time lock feature in the 'SimpleScript' language.
 --

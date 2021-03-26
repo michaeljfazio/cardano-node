@@ -1,6 +1,7 @@
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TypeFamilies #-}
 
@@ -46,6 +47,7 @@ import qualified Data.Sequence.Strict as Seq
 import qualified Data.Set as Set
 import           Data.Text (Text)
 import qualified Data.Text.Encoding as Text
+import           Data.Typeable
 
 import           Data.IP (IPv4, IPv6)
 import           Network.Socket (PortNumber)
@@ -62,12 +64,14 @@ import           Shelley.Spec.Ledger.TxBody (MIRPot (..))
 import qualified Shelley.Spec.Ledger.TxBody as Shelley
 
 import           Cardano.Api.Address
+import           Cardano.Api.Eras
 import           Cardano.Api.HasTypeProxy
 import           Cardano.Api.Hash
 import           Cardano.Api.KeysByron
 import           Cardano.Api.KeysPraos
 import           Cardano.Api.KeysShelley
 import           Cardano.Api.Orphans ()
+import           Cardano.Api.Script
 import           Cardano.Api.SerialiseCBOR
 import           Cardano.Api.SerialiseTextEnvelope
 import           Cardano.Api.StakePoolMetadata
@@ -78,12 +82,12 @@ import           Cardano.Api.Value
 -- Certificates embedded in transactions
 --
 
-data Certificate =
+data Certificate era =
 
      -- Stake address certificates
      StakeAddressRegistrationCertificate   StakeCredential
-   | StakeAddressDeregistrationCertificate StakeCredential
-   | StakeAddressDelegationCertificate     StakeCredential PoolId
+   | StakeAddressDeregistrationCertificate StakeCredential (WitnessKind WitMisc ShelleyEra)
+   | StakeAddressDelegationCertificate     StakeCredential PoolId (WitnessKind WitMisc ShelleyEra)
 
      -- Stake pool certificates
    | StakePoolRegistrationCertificate StakePoolParameters
@@ -98,17 +102,17 @@ data Certificate =
   deriving stock (Eq, Ord, Show)
   deriving anyclass SerialiseAsCBOR
 
-instance HasTypeProxy Certificate where
-    data AsType Certificate = AsCertificate
-    proxyToAsType _ = AsCertificate
+instance HasTypeProxy era => HasTypeProxy (Certificate era) where
+    data AsType (Certificate era) = AsCertificate (AsType era)
+    proxyToAsType _ = AsCertificate (proxyToAsType (Proxy :: Proxy era))
 
-instance ToCBOR Certificate where
+instance Typeable era => ToCBOR (Certificate era) where
     toCBOR = toCBOR . toShelleyCertificate
 
-instance FromCBOR Certificate where
+instance Typeable era => FromCBOR (Certificate era) where
     fromCBOR = fromShelleyCertificate <$> fromCBOR
 
-instance HasTextEnvelope Certificate where
+instance (Typeable era, HasTypeProxy era) => HasTextEnvelope (Certificate era) where
     textEnvelopeType _ = "CertificateShelley"
     textEnvelopeDefaultDescr cert = case cert of
       StakeAddressRegistrationCertificate{}   -> "Stake address registration"
@@ -185,28 +189,28 @@ data StakePoolMetadataReference =
 -- Constructor functions
 --
 
-makeStakeAddressRegistrationCertificate :: StakeCredential -> Certificate
+makeStakeAddressRegistrationCertificate :: StakeCredential ->  Certificate era
 makeStakeAddressRegistrationCertificate = StakeAddressRegistrationCertificate
 
-makeStakeAddressDeregistrationCertificate :: StakeCredential -> Certificate
+makeStakeAddressDeregistrationCertificate :: StakeCredential -> WitnessKind WitMisc ShelleyEra -> Certificate era
 makeStakeAddressDeregistrationCertificate = StakeAddressDeregistrationCertificate
 
-makeStakeAddressDelegationCertificate :: StakeCredential -> PoolId -> Certificate
+makeStakeAddressDelegationCertificate :: StakeCredential -> PoolId -> WitnessKind WitMisc ShelleyEra -> Certificate era
 makeStakeAddressDelegationCertificate = StakeAddressDelegationCertificate
 
-makeStakePoolRegistrationCertificate :: StakePoolParameters -> Certificate
+makeStakePoolRegistrationCertificate :: StakePoolParameters -> Certificate era
 makeStakePoolRegistrationCertificate = StakePoolRegistrationCertificate
 
-makeStakePoolRetirementCertificate :: PoolId -> EpochNo -> Certificate
+makeStakePoolRetirementCertificate :: PoolId -> EpochNo -> Certificate era
 makeStakePoolRetirementCertificate = StakePoolRetirementCertificate
 
 makeGenesisKeyDelegationCertificate :: Hash GenesisKey
                                     -> Hash GenesisDelegateKey
                                     -> Hash VrfKey
-                                    -> Certificate
+                                    -> Certificate era
 makeGenesisKeyDelegationCertificate = GenesisKeyDelegationCertificate
 
-makeMIRCertificate :: MIRPot -> MIRTarget -> Certificate
+makeMIRCertificate :: MIRPot -> MIRTarget -> Certificate era
 makeMIRCertificate = MIRCertificate
 
 
@@ -214,19 +218,19 @@ makeMIRCertificate = MIRCertificate
 -- Internal conversion functions
 --
 
-toShelleyCertificate :: Certificate -> Shelley.DCert StandardCrypto
+toShelleyCertificate :: Certificate era -> Shelley.DCert StandardCrypto
 toShelleyCertificate (StakeAddressRegistrationCertificate stakecred) =
     Shelley.DCertDeleg $
       Shelley.RegKey
         (toShelleyStakeCredential stakecred)
 
-toShelleyCertificate (StakeAddressDeregistrationCertificate stakecred) =
+toShelleyCertificate (StakeAddressDeregistrationCertificate stakecred _) =
     Shelley.DCertDeleg $
       Shelley.DeRegKey
         (toShelleyStakeCredential stakecred)
 
 toShelleyCertificate (StakeAddressDelegationCertificate
-                        stakecred (StakePoolKeyHash poolid)) =
+                        stakecred (StakePoolKeyHash poolid) _) =
     Shelley.DCertDeleg $
     Shelley.Delegate $
       Shelley.Delegation
@@ -270,20 +274,31 @@ toShelleyCertificate (MIRCertificate mirpot (SendToOppositePotMIR amount)) =
         (Shelley.SendToOppositePotMIR $ toShelleyLovelace amount)
 
 
-fromShelleyCertificate :: Shelley.DCert StandardCrypto -> Certificate
+fromShelleyCertificate :: Shelley.DCert StandardCrypto -> Certificate era
 fromShelleyCertificate (Shelley.DCertDeleg (Shelley.RegKey stakecred)) =
     StakeAddressRegistrationCertificate
       (fromShelleyStakeCredential stakecred)
 
 fromShelleyCertificate (Shelley.DCertDeleg (Shelley.DeRegKey stakecred)) =
-    StakeAddressDeregistrationCertificate
-      (fromShelleyStakeCredential stakecred)
+  case fromShelleyStakeCredential stakecred of
+    sCred@StakeCredentialByKey{} ->
+      StakeAddressDeregistrationCertificate sCred WitnessByKey
+    sCred@StakeCredentialByScript{}  ->
+      StakeAddressDeregistrationCertificate sCred
+        . WitnessByScript $ error "TODO: What should we do here?"
 
 fromShelleyCertificate (Shelley.DCertDeleg
                          (Shelley.Delegate (Shelley.Delegation stakecred poolid))) =
-    StakeAddressDelegationCertificate
-      (fromShelleyStakeCredential stakecred)
-      (StakePoolKeyHash poolid)
+  case fromShelleyStakeCredential stakecred of
+    sCred@StakeCredentialByKey{} ->
+      StakeAddressDelegationCertificate
+        sCred
+        (StakePoolKeyHash poolid) WitnessByKey
+    sCred@StakeCredentialByScript{}  ->
+      StakeAddressDelegationCertificate
+        sCred
+        (StakePoolKeyHash poolid) $ error "TODO: What should we do here?"
+
 
 fromShelleyCertificate (Shelley.DCertPool (Shelley.RegPool poolparams)) =
     StakePoolRegistrationCertificate

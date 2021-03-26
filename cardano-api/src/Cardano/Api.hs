@@ -196,7 +196,6 @@ module Cardano.Api (
     UpdateProposalSupportedInEra(..),
     WitnessPPDataSupportedInEra(..),
     PlutusScriptsSupportedInEra(..),
-    CertificateTypeInEra(..),
     WithdrawalsTypeInEra(..),
     TxInUsedForFees(..),
 

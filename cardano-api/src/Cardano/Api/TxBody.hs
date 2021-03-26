@@ -43,9 +43,6 @@ module Cardano.Api.TxBody (
     TxOutValue(..),
     DataHash(..),
 
-    -- * Tx witnesses
-    WitnessKind(..),
-
     -- ** Plutus script
     RedeemerPointer(..),
 
@@ -78,7 +75,6 @@ module Cardano.Api.TxBody (
     TxWitnessPPData(..),
     WitnessPPDataSupportedInEra(..),
     PlutusScriptsSupportedInEra(..),
-    CertificateTypeInEra(..),
     WithdrawalsTypeInEra(..),
     TxInUsedForFees(..),
 
@@ -300,17 +296,6 @@ data TxInTypeInEra era where
 deriving instance Eq   (TxInTypeInEra era)
 deriving instance Ord  (TxInTypeInEra era)
 deriving instance Show (TxInTypeInEra era)
-
--- ----------------------------------------------------------------------------
--- The kind of witness to use, key (signature) or script
---
-
-data WitnessKind witctx era where
-   WitnessByKey :: WitnessKind witctx era
-   WitnessByScript :: ScriptWitness witctx era -> WitnessKind witctx era
-
-deriving instance Eq   (WitnessKind witctx era)
-deriving instance Show (WitnessKind witctx era)
 
 -- | The 'RedeemerPointer' gives us the index
 -- at which the redeemer exists within a transaction body.
@@ -905,21 +890,12 @@ data TxCertificates era where
      TxCertificatesNone :: TxCertificates era
 
      TxCertificates     :: CertificatesSupportedInEra era
-                        -> [(Certificate, CertificateTypeInEra era)]
+                        -> [Certificate era]
                         -> TxCertificates era
 
 deriving instance Eq   (TxCertificates era)
 deriving instance Show (TxCertificates era)
 
-
-data CertificateTypeInEra era where
-  NoPlutusScriptCert :: CertificateTypeInEra era
-  PlutusCertifying   :: PlutusScriptsSupportedInEra era
-                     -> Maybe ScriptDatum
-                     -> CertificateTypeInEra era
-
-deriving instance Eq   (CertificateTypeInEra era)
-deriving instance Show (CertificateTypeInEra era)
 
 -- ----------------------------------------------------------------------------
 -- Transaction metadata (era-dependent)
@@ -1350,8 +1326,7 @@ makeShelleyTransactionBody era@ShelleyBasedEraShelley
           (case txCertificates of
              TxCertificatesNone  -> Seq.empty
              TxCertificates _ cs ->
-               Seq.fromList
-                 $ map (\(c,_) -> toShelleyCertificate c) cs)
+               Seq.fromList $ map toShelleyCertificate cs)
           (case txWithdrawals of
              TxWithdrawalsNone  -> Shelley.Wdrl Map.empty
              TxWithdrawals _ ws -> toShelleyWithdrawal ws)
@@ -1410,8 +1385,7 @@ makeShelleyTransactionBody era@ShelleyBasedEraAllegra
           (Seq.fromList (map toShelleyTxOut txOuts))
           (case txCertificates of
              TxCertificatesNone  -> Seq.empty
-             TxCertificates _ cs ->
-               Seq.fromList $ map (\(c,_) -> toShelleyCertificate c) cs)
+             TxCertificates _ cs -> Seq.fromList $ map toShelleyCertificate cs)
           (case txWithdrawals of
              TxWithdrawalsNone  -> Shelley.Wdrl Map.empty
              TxWithdrawals _ ws -> toShelleyWithdrawal ws)
@@ -1488,7 +1462,7 @@ makeShelleyTransactionBody era@ShelleyBasedEraMary
           (Seq.fromList (map toShelleyTxOut txOuts))
           (case txCertificates of
              TxCertificatesNone  -> Seq.empty
-             TxCertificates _ cs -> Seq.fromList $ map (\(c,_) -> toShelleyCertificate c) cs)
+             TxCertificates _ cs -> Seq.fromList $ map toShelleyCertificate cs)
           (case txWithdrawals of
              TxWithdrawalsNone  -> Shelley.Wdrl Map.empty
              TxWithdrawals _ ws -> toShelleyWithdrawal ws)
@@ -1584,8 +1558,7 @@ makeShelleyTransactionBody era@ShelleyBasedEraAlonzo
           (Seq.fromList (map toShelleyTxOut txOuts))
           (case txCertificates of
              TxCertificatesNone  -> Seq.empty
-             TxCertificates _ cs -> Seq.fromList
-                                      $ map (\(c,_mPlutusScripts) -> toShelleyCertificate c) cs) --TODO: Need to handle this
+             TxCertificates _ cs -> Seq.fromList $ map toShelleyCertificate cs)
           (case txWithdrawals of
              TxWithdrawalsNone  -> Shelley.Wdrl Map.empty
              TxWithdrawals _ ws -> toShelleyWithdrawal ws)
@@ -1710,7 +1683,7 @@ makeShelleyTransaction :: [(TxIn, WitnessKind WitTxIn ShelleyEra, TxInUsedForFee
                        -> [TxOut ShelleyEra]
                        -> SlotNo
                        -> Lovelace
-                       -> [(Certificate, CertificateTypeInEra ShelleyEra)]
+                       -> [Certificate ShelleyEra]
                        -> [(StakeAddress, Lovelace, WitnessKind WitMisc ShelleyEra)]
                        -> Maybe TxMetadata
                        -> Maybe UpdateProposal
