@@ -310,6 +310,8 @@ data RedeemerPointer =
   | RewardingRedeemer Word64
     -- ^ Gives us the index of the withdrawal certificate.
 
+-- constructRedeemerPointer
+
 makeTxWitnessPPDataHash
   :: ScriptLanguageInEra lang era
   -> TxWitnessPPData era -- Strictly plutus tagged things
@@ -1512,7 +1514,6 @@ makeShelleyTransactionBody era@ShelleyBasedEraAlonzo
                                            txMintValue,
                                            txExecutionUnits,
                                            txWitnessPPData
-                                           -- TODO: Need isValidating here:Jordan
                                           } = do
 
     guard (not (null txInsAndWits)) ?! TxBodyEmptyTxIns

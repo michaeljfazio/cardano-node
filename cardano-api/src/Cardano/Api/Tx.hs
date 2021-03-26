@@ -55,8 +55,11 @@ import qualified Data.ByteString.Lazy as LBS
 
 import           Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
+import           Data.Sequence.Strict (StrictSeq)
 import qualified Data.Set as Set
 import qualified Data.Vector as Vector
+import           GHC.Records (HasField (..))
+
 
 --
 -- Common types, consensus, network
@@ -94,10 +97,12 @@ import qualified Cardano.Ledger.Era as Ledger
 import qualified Cardano.Ledger.SafeHash as Ledger
 import qualified Cardano.Ledger.Shelley.Constraints as Shelley
 
+import qualified Shelley.Spec.Ledger.Address as Shelley
 import qualified Shelley.Spec.Ledger.Address.Bootstrap as Shelley
 import           Shelley.Spec.Ledger.BaseTypes (maybeToStrictMaybe, strictMaybeToMaybe)
 import qualified Shelley.Spec.Ledger.Keys as Shelley
 import qualified Shelley.Spec.Ledger.Tx as Shelley
+import qualified Shelley.Spec.Ledger.TxBody as Shelley
 
 import           Cardano.Api.Address
 import           Cardano.Api.Certificate
@@ -577,6 +582,7 @@ getTxWitnesses (ShelleyTx era tx) =
      ++ [ShelleyRedeemerBudget era rdmrWits]
 
     getAlonzoTxWitnesses _ = error "Cardano.Ledger.Alonzo.Tx.TxConstr"
+
 makeSignedTransaction :: forall era ledgerera.
                          ShelleyLedgerEra era ~ ledgerera
                       => [Witness era]
@@ -638,6 +644,19 @@ makeSignedTransaction witnesses (ShelleyTxBody era txbody txmetadata isValid) =
            Just vBool -> vBool
            Nothing -> error "makeAlonzoSignedTransaction: isValidating flag was not specified")
         (error "")
+
+makeWithdrawalScriptRedeemerPtr
+  :: forall ledgerera.
+     Ledger.Era ledgerera
+--     HasField "inputs" (Core.TxBody era) (Set (TxIn (Crypto era)))
+--  => HasField "wdrls" (Core.TxBody era) (Wdrl (Crypto era))
+  => HasField "certs" (Ledger.TxBody ledgerera) (StrictSeq (Shelley.DCert StandardCrypto))
+--  => HasField "minted" (Core.TxBody era) (Set (ScriptHash (Crypto era)))
+  => Ledger.TxBody ledgerera
+  -> Shelley.RewardAcnt StandardCrypto
+  -> Alonzo.RdmrPtr
+makeWithdrawalScriptRedeemerPtr txBody rwdAcct =
+  Alonzo.rdptr @ledgerera (error "") (error "") -- txBody $ Alonzo.Rewarding $ Shelley.RewardAcnt rwdAcct
 
     --makeShelleySignedTransaction :: ShelleyLedgerEra era ~ ledgerera
     --                             => Ledger.TxOut era ~ Ledger.TxOut ledgerera
